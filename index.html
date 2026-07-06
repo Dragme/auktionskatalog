@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auktionskatalog – opret og download katalogliste</title>
+<meta name="description" content="Skriv katalognumre, varebeskrivelser og butikspriser – og download listen som Excel eller CSV.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#17191E;
+    --paper:#F6F5F0;
+    --card:#FFFFFF;
+    --green:#1E5C48;
+    --green-dark:#164536;
+    --brass:#A8863C;
+    --line:#DCD8CC;
+    --muted:#6B675C;
+    --danger:#9C3A2C;
+    --radius:10px;
+    --display:'Arial Narrow','Helvetica Neue',Arial,sans-serif;
+    --body:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+
+  /* Header band, in the spirit of a black auction-house wordmark */
+  header{background:var(--ink);color:#fff;padding:18px 20px 16px}
+  .wordmark{max-width:960px;margin:0 auto;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .wordmark h1{
+    font-family:var(--display);font-weight:700;letter-spacing:.14em;
+    text-transform:uppercase;font-size:1.5rem;margin:0;
+  }
+  .wordmark .hammer{color:var(--brass);letter-spacing:.14em;text-transform:uppercase;
+    font-family:var(--display);font-size:.85rem;border-left:2px solid var(--brass);padding-left:14px}
+
+  main{max-width:960px;margin:0 auto;padding:20px}
+
+  /* Kort brugsanvisning */
+  .howto{margin:0 0 18px;padding:2px 4px}
+  .howto h2{
+    font-family:var(--display);text-transform:uppercase;letter-spacing:.12em;
+    font-size:.78rem;color:var(--green);margin:0 0 6px;
+  }
+  .howto p{margin:0 0 6px;font-size:.92rem;color:var(--ink);max-width:70ch}
+  .howto-example{color:var(--muted);font-size:.85rem}
+
+  /* Entry card */
+  .entry{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;box-shadow:0 1px 2px rgba(23,25,30,.06);
+  }
+  .entry-row{display:flex;gap:12px;align-items:stretch}
+
+  /* The bidding paddle: next catalogue number */
+  .paddle{
+    flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    background:var(--ink);color:#fff;border-radius:14px 14px 18px 18px;
+    min-width:92px;padding:8px 10px 10px;border-bottom:4px solid var(--brass);
+  }
+  .paddle small{font-family:var(--display);text-transform:uppercase;letter-spacing:.12em;font-size:.62rem;color:#C9C4B6}
+  .paddle input{
+    width:76px;background:none;border:none;color:#fff;text-align:center;
+    font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;outline:none;
+  }
+  .paddle input:focus{border-bottom:1px dashed var(--brass)}
+
+  .fields{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+  .desc-wrap{display:flex;gap:8px}
+  .desc-wrap input{flex:1;min-width:0}
+  input[type=text],input[type=number]{
+    font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+  }
+  input:focus{outline:2px solid var(--green);outline-offset:1px;border-color:var(--green)}
+  .small-fields{display:flex;gap:8px;flex-wrap:wrap}
+  .small-fields label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted)}
+  .small-fields input{width:130px}
+
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid transparent;padding:10px 16px}
+  .btn-primary{background:var(--green);color:#fff;font-weight:600}
+  .btn-primary:hover{background:var(--green-dark)}
+  .btn-ghost{background:#fff;border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--ink)}
+  .btn-danger{background:#fff;border-color:var(--line);color:var(--danger)}
+  .btn-danger:hover{border-color:var(--danger)}
+  button:focus-visible,.mic:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  .mic{
+    flex:0 0 auto;width:46px;border:1px solid var(--line);border-radius:8px;background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:1.15rem;
+  }
+  .mic[aria-pressed="true"]{background:var(--danger);border-color:var(--danger);color:#fff;animation:pulse 1.2s infinite}
+  .mic:disabled{opacity:.4;cursor:not-allowed}
+  @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(156,58,44,.18)}}
+  @media (prefers-reduced-motion: reduce){.mic[aria-pressed="true"]{animation:none}}
+
+  .hint{font-size:.8rem;color:var(--muted);margin:8px 2px 0}
+  .warn{font-size:.8rem;color:var(--danger);margin-top:4px}
+
+  /* Table */
+  .table-wrap{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th{
+    font-family:var(--display);text-transform:uppercase;letter-spacing:.1em;font-size:.72rem;
+    text-align:left;color:var(--muted);background:var(--paper);
+    padding:10px 12px;border-bottom:1px solid var(--line);
+  }
+  td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  td.nr{font-variant-numeric:tabular-nums;font-weight:700;width:82px;text-align:right;padding-right:14px;color:var(--green)}
+  td input{width:100%;border:1px solid transparent;background:transparent;padding:8px;border-radius:6px;font:inherit}
+  td input:hover{border-color:var(--line)}
+  td input:focus{background:#fff;border-color:var(--green);outline:none}
+  td.num-col{width:120px}
+  td.del{width:44px;text-align:center}
+  .row-del{border:none;background:none;color:var(--muted);font-size:1.05rem;padding:6px;border-radius:6px}
+  .row-del:hover{color:var(--danger);background:var(--paper)}
+
+  .empty{padding:34px 20px;text-align:center;color:var(--muted)}
+  .empty strong{color:var(--ink)}
+
+  /* Toolbar */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+  .count{margin-left:auto;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  footer{max-width:960px;margin:28px auto 40px;padding:0 20px;font-size:.78rem;color:var(--muted)}
+
+  @media (max-width:640px){
+    .entry-row{flex-direction:column}
+    .paddle{flex-direction:row;gap:10px;min-width:0;justify-content:flex-start;padding:8px 14px}
+    .paddle input{font-size:1.5rem;width:64px;text-align:left}
+    .small-fields input{width:110px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">
+    <h1>Auktionskatalog</h1>
+    <span class="hammer">Katalognr. · Beskrivelse · Butikspris</span>
+  </div>
+</header>
+
+<main>
+  <section class="howto" aria-label="Sådan bruges siden">
+    <h2>Sådan bruges siden</h2>
+    <p>
+      Skriv varens beskrivelse – og butiksprisen, hvis den kendes – og tryk <strong>Enter</strong>.
+      Varen gemmes i tabellen, og katalognummeret hopper selv videre til det næste.
+      Du kan også trykke på 🎤 og indtale beskrivelsen – så siger du bare <strong>»næste«</strong> i stedet for at trykke Enter.
+      Når hele kataloget er tastet ind, trykker du <strong>Download Excel</strong> og bruger filen som input til katalogsystemet.
+    </p>
+    <p class="howto-example">
+      Eksempel: Skriv <em>»HP laserprinter«</em> → Enter → skriv <em>»Gastronoma, Airfryer«</em> og butikspris <em>599</em> → Enter …
+      Eller med stemmen: <em>»HP laserprinter … næste … Gastronoma airfryer … næste«</em>.
+      Tabellen bliver til: <strong>1</strong> HP laserprinter · <strong>2</strong> Gastronoma, Airfryer (599 kr.)
+    </p>
+  </section>
+
+  <section class="entry" aria-label="Tilføj vare">
+    <div class="entry-row">
+      <div class="paddle">
+        <small>Næste nr.</small>
+        <input id="nextNr" type="number" min="1" value="1" aria-label="Næste katalognummer">
+      </div>
+      <div class="fields">
+        <div class="desc-wrap">
+          <input id="desc" type="text" autocomplete="off"
+                 placeholder="Varebeskrivelse – f.eks. Makita, DTM51Z, multiværktøj"
+                 aria-label="Varebeskrivelse">
+          <button id="micBtn" class="mic" type="button" aria-pressed="false"
+                  title="Indtal beskrivelse (tale-til-tekst)" aria-label="Indtal beskrivelse">🎤</button>
+        </div>
+        <div class="small-fields">
+          <label>Butikspris (kr.)
+            <input id="pris" type="text" inputmode="decimal" autocomplete="off" placeholder="valgfri – hvis den kendes">
+          </label>
+          <label style="justify-content:flex-end">
+            <span>&nbsp;</span>
+            <button id="addBtn" class="btn-primary" type="button">Tilføj vare&nbsp;(Enter)</button>
+          </label>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Tryk <strong>Enter</strong> i beskrivelsen for at gemme varen og gå videre til næste katalognummer. Tryk på 🎤 for at indtale beskrivelsen (kræver Chrome eller Edge) – og sig <strong>»næste«</strong> (eller »enter«) for at gemme varen og hoppe til næste nummer, uden at røre tastaturet.</p>
+    <p class="hint" id="saveStatus">Listen gemmes automatisk i denne browser og gendannes, hvis fanen lukkes eller internettet ryger.</p>
+  </section>
+
+  <div class="table-wrap">
+    <table aria-label="Katalogliste">
+      <thead>
+        <tr>
+          <th style="text-align:right">Katalog nr.</th>
+          <th>Varebeskrivelse</th>
+          <th>Butikspris</th>
+          <th><span style="position:absolute;left:-9999px">Slet</span></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty">
+      <p><strong>Ingen varer endnu.</strong><br>Skriv den første varebeskrivelse ovenfor og tryk Enter.</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="dlXlsx" class="btn-primary" type="button">Download Excel (.xlsx)</button>
+    <button id="dlCsv" class="btn-ghost" type="button">Download CSV</button>
+    <button id="renumber" class="btn-ghost" type="button" title="Giv alle rækker fortløbende numre fra første række">Omnummerér</button>
+    <button id="clearAll" class="btn-danger" type="button">Ryd alt</button>
+    <span class="count" id="count">0 varer</span>
+  </div>
+</main>
+
+<footer>
+  Alle data bliver kun i din browser og gemmes automatisk lokalt på denne enhed – intet sendes til en server. Tale-til-tekst bruger browserens indbyggede genkendelse (dansk) og virker i Chrome og Edge.
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "auktionskatalog-v1";
+  var items = []; // {nr, desc, pris}
+  var rowsEl = document.getElementById("rows");
+  var emptyEl = document.getElementById("empty");
+  var countEl = document.getElementById("count");
+  var nextNrEl = document.getElementById("nextNr");
+  var descEl = document.getElementById("desc");
+  var prisEl = document.getElementById("pris");
+  var statusEl = document.getElementById("saveStatus");
+
+  /* ---------- Automatisk lagring i browseren ---------- */
+
+  function saveState(){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        items: items,
+        nextNr: nextNrEl.value
+      }));
+      var d = new Date();
+      var hh = ("0" + d.getHours()).slice(-2);
+      var mm = ("0" + d.getMinutes()).slice(-2);
+      statusEl.textContent = "✓ Gemt automatisk kl. " + hh + ":" + mm +
+        " – listen gendannes, hvis fanen lukkes eller internettet ryger.";
+    } catch (e) {
+      // Privat browsing eller fuldt lager – siden virker stadig, men gemmer ikke.
+      statusEl.textContent = "⚠ Kunne ikke gemme automatisk i denne browser – husk at downloade filen, inden du lukker siden.";
+    }
+  }
+
+  function loadState(){
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (data && Array.isArray(data.items) && data.items.length){
+        items = data.items;
+        if (data.nextNr) nextNrEl.value = data.nextNr;
+        statusEl.textContent = "✓ " + items.length +
+          (items.length === 1 ? " vare" : " varer") + " gendannet fra sidste besøg.";
+      }
+    } catch (e) { /* intet gemt eller lagring utilgængelig */ }
+  }
+
+  nextNrEl.addEventListener("change", saveState);
+
+  function render(){
+    rowsEl.innerHTML = "";
+    items.forEach(function(item, i){
+      var tr = document.createElement("tr");
+
+      var tdNr = document.createElement("td");
+      tdNr.className = "nr";
+      tdNr.textContent = item.nr;
+      tr.appendChild(tdNr);
+
+      tr.appendChild(cellInput(item, "desc", "text", "Varebeskrivelse"));
+      tr.appendChild(cellInput(item, "pris", "text", "Butikspris", "num-col"));
+
+      var tdDel = document.createElement("td");
+      tdDel.className = "del";
+      var del = document.createElement("button");
+      del.className = "row-del";
+      del.type = "button";
+      del.textContent = "✕";
+      del.setAttribute("aria-label", "Slet katalog nr. " + item.nr);
+      del.addEventListener("click", function(){
+        items.splice(i, 1);
+        render();
+      });
+      tdDel.appendChild(del);
+      tr.appendChild(tdDel);
+
+      rowsEl.appendChild(tr);
+    });
+    emptyEl.style.display = items.length ? "none" : "block";
+    countEl.textContent = items.length + (items.length === 1 ? " vare" : " varer");
+    saveState();
+  }
+
+  function cellInput(item, key, type, label, cls){
+    var td = document.createElement("td");
+    if (cls) td.className = cls;
+    var input = document.createElement("input");
+    input.type = type;
+    input.value = item[key];
+    input.setAttribute("aria-label", label + " for katalog nr. " + item.nr);
+    input.addEventListener("input", function(){ item[key] = input.value; saveState(); });
+    td.appendChild(input);
+    return td;
+  }
+
+  function addItem(){
+    var desc = descEl.value.trim();
+    if (!desc){ descEl.focus(); return; }
+    var nr = parseInt(nextNrEl.value, 10);
+    if (isNaN(nr) || nr < 1) nr = items.length ? items[items.length-1].nr + 1 : 1;
+    items.push({ nr: nr, desc: desc, pris: prisEl.value.trim() });
+    nextNrEl.value = nr + 1;
+    descEl.value = ""; prisEl.value = "";
+    render();
+    descEl.focus();
+  }
+
+  document.getElementById("addBtn").addEventListener("click", addItem);
+  [descEl, prisEl].forEach(function(el){
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); addItem(); }
+    });
+  });
+
+  document.getElementById("clearAll").addEventListener("click", function(){
+    if (!items.length) return;
+    if (confirm("Slet hele listen? Dette kan ikke fortrydes.")){
+      items = [];
+      nextNrEl.value = 1;
+      render();
+      descEl.focus();
+    }
+  });
+
+  document.getElementById("renumber").addEventListener("click", function(){
+    if (!items.length) return;
+    var start = items[0].nr;
+    items.forEach(function(item, i){ item.nr = start + i; });
+    nextNrEl.value = start + items.length;
+    render();
+  });
+
+  /* ---------- Export ---------- */
+
+  function fileName(ext){
+    var d = new Date();
+    var pad = function(n){ return (n < 10 ? "0" : "") + n; };
+    return "auktionskatalog-" + d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()) + "." + ext;
+  }
+
+  function toNumberOrText(v){
+    if (v === "") return "";
+    var norm = v.replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(norm);
+    return isNaN(n) ? v : n;
+  }
+
+  document.getElementById("dlXlsx").addEventListener("click", function(){
+    if (!requireItems()) return;
+    if (typeof XLSX === "undefined"){
+      alert("Excel-funktionen kunne ikke indlæses, fordi siden blev åbnet uden internet. Brug 'Download CSV' i stedet – den virker altid, og filen kan åbnes i Excel.");
+      return;
+    }
+    var aoa = [["Katalog nr.", "Varebeskrivelse", "Butikspris", "Bud"]];
+    items.forEach(function(it){
+      // Bud-kolonnen eksporteres tom – den udfyldes af kunderne på selve auktionen.
+      aoa.push([it.nr, it.desc, toNumberOrText(it.pris), ""]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{wch:10},{wch:50},{wch:12},{wch:12}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Katalog");
+    XLSX.writeFile(wb, fileName("xlsx"));
+  });
+
+  document.getElementById("dlCsv").addEventListener("click", function(){
+    if (!requireItems()) return;
+    var q = function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; };
+    var lines = [["Katalog nr.","Varebeskrivelse","Butikspris","Bud"].map(q).join(";")];
+    items.forEach(function(it){
+      lines.push([it.nr, it.desc, it.pris, ""].map(q).join(";"));
+    });
+    // BOM + semikolon, så dansk Excel åbner filen korrekt
+    var blob = new Blob(["\uFEFF" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName("csv");
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  });
+
+  function requireItems(){
+    if (!items.length){
+      alert("Listen er tom – tilføj mindst én vare først.");
+      return false;
+    }
+    return true;
+  }
+
+  /* ---------- Tale-til-tekst (Web Speech API, da-DK) ---------- */
+
+  var micBtn = document.getElementById("micBtn");
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null;
+  var listening = false;
+  var baseText = "";
+
+  if (!SR){
+    micBtn.disabled = true;
+    micBtn.title = "Tale-til-tekst understøttes ikke i denne browser – brug Chrome eller Edge.";
+  } else {
+    micBtn.addEventListener("click", function(){
+      if (listening){ stopRec(); } else { startRec(); }
+    });
+  }
+
+  function startRec(){
+    rec = new SR();
+    rec.lang = "da-DK";
+    rec.interimResults = true;
+    rec.continuous = true;
+    baseText = descEl.value ? descEl.value.replace(/\s+$/, "") + " " : "";
+    var consumed = 0; // antal endelige resultater, der allerede er behandlet
+    var CMD = /\b(næste|enter)\b[.,!?]?/i;
+
+    rec.onresult = function(e){
+      var finalText = "";
+      var interim = "";
+      var lastFinalEnd = consumed;
+      for (var i = consumed; i < e.results.length; i++){
+        if (e.results[i].isFinal){
+          finalText += e.results[i][0].transcript;
+          lastFinalEnd = i + 1;
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+
+      if (finalText){
+        // Kommandoen tjekkes kun i endelig tekst, så en halvfærdig
+        // genkendelse ikke gemmer rækken for tidligt.
+        var pending = baseText + finalText;
+        var m;
+        while ((m = pending.match(CMD))){
+          var before = pending.slice(0, m.index).trim();
+          pending = pending.slice(m.index + m[0].length);
+          if (before){
+            descEl.value = before;
+            addItem(); // gemmer rækken og tæller katalognummeret op
+          }
+        }
+        baseText = pending.replace(/^\s+/, "");
+        consumed = lastFinalEnd;
+      }
+
+      descEl.value = (baseText + interim).replace(/^\s+/, "");
+    };
+    rec.onerror = function(e){
+      stopRec();
+      if (e.error === "not-allowed"){
+        alert("Browseren har ikke adgang til mikrofonen. Tillad mikrofon for denne side og prøv igen.");
+      }
+    };
+    rec.onend = function(){ setListening(false); };
+
+    try {
+      rec.start();
+      setListening(true);
+      descEl.focus();
+    } catch (err){
+      setListening(false);
+    }
+  }
+
+  function stopRec(){
+    if (rec){ try { rec.stop(); } catch(e){} }
+    setListening(false);
+  }
+
+  function setListening(on){
+    listening = on;
+    micBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    micBtn.textContent = on ? "■" : "🎤";
+    micBtn.title = on ? "Stop optagelse" : "Indtal beskrivelse (tale-til-tekst)";
+  }
+
+  loadState();
+  render();
+  if (items.length){
+    statusEl.textContent = "✓ " + items.length +
+      (items.length === 1 ? " vare" : " varer") + " gendannet fra sidste besøg.";
+  }
+  descEl.focus();
+})();
+</script>
+</body>
+</html>

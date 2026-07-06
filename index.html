@@ -154,7 +154,7 @@
     </p>
     <p class="howto-example">
       Eksempel: Skriv <em>»HP laserprinter«</em> → Enter → skriv <em>»Gastronoma, Airfryer«</em> og butikspris <em>599</em> → Enter …
-      Eller med stemmen: <em>»HP laserprinter … næste … Gastronoma airfryer … næste«</em>.
+      Eller med stemmen: <em>»HP laserprinter … næste … Gastronoma airfryer … butikspris 599 … næste … stop«</em>.
       Tabellen bliver til: <strong>1</strong> HP laserprinter · <strong>2</strong> Gastronoma, Airfryer (599 kr.)
     </p>
   </section>
@@ -184,7 +184,7 @@
         </div>
       </div>
     </div>
-    <p class="hint">Tryk <strong>Enter</strong> i beskrivelsen for at gemme varen og gå videre til næste katalognummer. Tryk på 🎤 for at indtale beskrivelsen (kræver Chrome eller Edge) – og sig <strong>»næste«</strong> (eller »enter«) for at gemme varen og hoppe til næste nummer, uden at røre tastaturet.</p>
+    <p class="hint">Tryk <strong>Enter</strong> i beskrivelsen for at gemme varen og gå videre til næste katalognummer. Tryk på 🎤 for at indtale beskrivelsen (kræver Chrome eller Edge) – sig <strong>»butikspris 599«</strong> for at lægge prisen i sit eget felt, sig <strong>»næste«</strong> for at gemme varen og hoppe til næste nummer, og sig <strong>»stop«</strong> for at slukke mikrofonen. Mikrofonen bliver ved med at lytte – også gennem pauser – indtil du siger »stop« eller trykker på knappen igen.</p>
     <p class="hint" id="saveStatus">Listen gemmes automatisk i denne browser og gendannes, hvis fanen lukkes eller internettet ryger.</p>
   </section>
 
@@ -415,6 +415,7 @@
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var rec = null;
   var listening = false;
+  var keepAlive = false; // holder mikrofonen i live, selv når browseren stopper efter stilhed
   var baseText = "";
 
   if (!SR){
@@ -426,14 +427,32 @@
     });
   }
 
+  // Stemmekommando: »butikspris 599« lægger prisen i sit eget felt.
+  var PRICE_KEY = /\b(?:butikspris(?:en)?|pris)\b[:.,]?\s*/i;
+
+  function splitVoice(text){
+    var m = text.match(PRICE_KEY);
+    if (!m) return { desc: text.trim(), pris: "", hasPris: false };
+    return {
+      desc: text.slice(0, m.index).trim(),
+      pris: text.slice(m.index + m[0].length)
+              .replace(/\bkroner\b|\bkr\b\.?|,-/gi, "")
+              .replace(/[.,!?]\s*$/, "")
+              .trim(),
+      hasPris: true
+    };
+  }
+
   function startRec(){
     rec = new SR();
     rec.lang = "da-DK";
     rec.interimResults = true;
     rec.continuous = true;
+    keepAlive = true;
     baseText = descEl.value ? descEl.value.replace(/\s+$/, "") + " " : "";
     var consumed = 0; // antal endelige resultater, der allerede er behandlet
     var CMD = /\b(næste|enter)\b[.,!?]?/i;
+    var STOP = /\bstop\b[.,!?]?/i;
 
     rec.onresult = function(e){
       var finalText = "";
@@ -448,43 +467,84 @@
         }
       }
 
+      var stopRequested = false;
+
       if (finalText){
-        // Kommandoen tjekkes kun i endelig tekst, så en halvfærdig
+        // Kommandoer tjekkes kun i endelig tekst, så en halvfærdig
         // genkendelse ikke gemmer rækken for tidligt.
         var pending = baseText + finalText;
+
+        // »stop« slukker mikrofonen – ordet fjernes fra teksten først.
+        if (STOP.test(finalText)){
+          stopRequested = true;
+          pending = pending.replace(/\bstop\b[.,!?]?/gi, " ").replace(/\s{2,}/g, " ");
+        }
+
         var m;
         while ((m = pending.match(CMD))){
           var before = pending.slice(0, m.index).trim();
           pending = pending.slice(m.index + m[0].length);
           if (before){
-            descEl.value = before;
-            addItem(); // gemmer rækken og tæller katalognummeret op
+            var parts = splitVoice(before);
+            if (parts.desc){
+              descEl.value = parts.desc;
+              if (parts.hasPris) prisEl.value = parts.pris;
+              addItem(); // gemmer rækken og tæller katalognummeret op
+            }
           }
         }
         baseText = pending.replace(/^\s+/, "");
         consumed = lastFinalEnd;
       }
 
-      descEl.value = (baseText + interim).replace(/^\s+/, "");
-    };
-    rec.onerror = function(e){
-      stopRec();
-      if (e.error === "not-allowed"){
-        alert("Browseren har ikke adgang til mikrofonen. Tillad mikrofon for denne side og prøv igen.");
+      // Vis løbende: beskrivelse i sit felt, og alt efter »butikspris« i prisfeltet.
+      var live = splitVoice((baseText + interim).replace(/^\s+/, ""));
+      descEl.value = live.desc;
+      if (live.hasPris) prisEl.value = live.pris;
+
+      if (stopRequested){
+        keepAlive = false;
+        stopRec();
       }
     };
-    rec.onend = function(){ setListening(false); };
+
+    rec.onerror = function(e){
+      // Kun reelle fejl slukker mikrofonen – stilhed o.l. genstartes af onend.
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture"){
+        keepAlive = false;
+        stopRec();
+        if (e.error !== "audio-capture"){
+          alert("Browseren har ikke adgang til mikrofonen. Tillad mikrofon for denne side og prøv igen.");
+        }
+      }
+    };
+
+    rec.onend = function(){
+      if (keepAlive){
+        // Browseren stopper selv genkendelsen efter stilhed –
+        // start igen, så mikrofonen bliver ved med at lytte, indtil man siger »stop«.
+        setTimeout(function(){
+          if (keepAlive){
+            try { startRec(); } catch (e){ keepAlive = false; setListening(false); }
+          }
+        }, 250);
+      } else {
+        setListening(false);
+      }
+    };
 
     try {
       rec.start();
       setListening(true);
       descEl.focus();
     } catch (err){
+      keepAlive = false;
       setListening(false);
     }
   }
 
   function stopRec(){
+    keepAlive = false;
     if (rec){ try { rec.stop(); } catch(e){} }
     setListening(false);
   }
@@ -493,7 +553,7 @@
     listening = on;
     micBtn.setAttribute("aria-pressed", on ? "true" : "false");
     micBtn.textContent = on ? "■" : "🎤";
-    micBtn.title = on ? "Stop optagelse" : "Indtal beskrivelse (tale-til-tekst)";
+    micBtn.title = on ? "Stop optagelse (eller sig »stop«)" : "Indtal beskrivelse (tale-til-tekst)";
   }
 
   loadState();

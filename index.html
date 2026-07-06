@@ -32,19 +32,22 @@
     font-family:var(--display);font-weight:700;letter-spacing:.14em;
     text-transform:uppercase;font-size:1.5rem;margin:0;
   }
-  .wordmark .hammer{color:var(--brass);letter-spacing:.14em;text-transform:uppercase;
-    font-family:var(--display);font-size:.85rem;border-left:2px solid var(--brass);padding-left:14px}
 
   main{max-width:960px;margin:0 auto;padding:20px}
 
-  /* Kort brugsanvisning */
-  .howto{margin:0 0 18px;padding:2px 4px}
-  .howto h2{
+  /* Kort brugsanvisning (sammenklappelig) */
+  .howto{margin:0 0 16px;padding:2px 4px}
+  .howto summary{
     font-family:var(--display);text-transform:uppercase;letter-spacing:.12em;
-    font-size:.78rem;color:var(--green);margin:0 0 6px;
+    font-size:.78rem;color:var(--green);cursor:pointer;user-select:none;
   }
-  .howto p{margin:0 0 6px;font-size:.92rem;color:var(--ink);max-width:70ch}
+  .howto summary:hover{color:var(--green-dark)}
+  .howto p{margin:8px 0 6px;font-size:.92rem;color:var(--ink);max-width:70ch}
   .howto-example{color:var(--muted);font-size:.85rem}
+
+  .btn-link{background:none;border:none;color:var(--muted);padding:10px 6px;text-decoration:underline;text-underline-offset:3px}
+  .btn-link:hover{color:var(--ink)}
+  .btn-link-danger:hover{color:var(--danger)}
 
   /* Entry card */
   .entry{
@@ -139,25 +142,27 @@
 <header>
   <div class="wordmark">
     <h1>Auktionskatalog</h1>
-    <span class="hammer">Katalognr. · Beskrivelse · Butikspris</span>
   </div>
 </header>
 
 <main>
-  <section class="howto" aria-label="Sådan bruges siden">
-    <h2>Sådan bruges siden</h2>
+  <details class="howto">
+    <summary>Sådan bruges siden</summary>
     <p>
-      Skriv varens beskrivelse – og butiksprisen, hvis den kendes – og tryk <strong>Enter</strong>.
-      Varen gemmes i tabellen, og katalognummeret hopper selv videre til det næste.
-      Du kan også trykke på 🎤 og indtale beskrivelsen – så siger du bare <strong>»næste«</strong> i stedet for at trykke Enter.
-      Når hele kataloget er tastet ind, trykker du <strong>Download Excel</strong> og bruger filen som input til katalogsystemet.
+      Skriv varens beskrivelse – og evt. butikspris – og tryk <strong>Enter</strong>.
+      Varen gemmes i tabellen, og katalognummeret hopper selv videre.
+      Til sidst trykker du <strong>Download Excel</strong> og bruger filen som input til katalogsystemet.
+    </p>
+    <p>
+      Med 🎤 kan alt indtales (Chrome/Edge): sig <strong>»butikspris 599«</strong> for at lægge prisen i sit eget felt,
+      <strong>»næste«</strong> for at gemme varen og gå videre, og <strong>»stop«</strong> for at slukke mikrofonen.
+      Mikrofonen lytter videre gennem pauser, indtil du siger »stop«.
     </p>
     <p class="howto-example">
-      Eksempel: Skriv <em>»HP laserprinter«</em> → Enter → skriv <em>»Gastronoma, Airfryer«</em> og butikspris <em>599</em> → Enter …
-      Eller med stemmen: <em>»HP laserprinter … næste … Gastronoma airfryer … butikspris 599 … næste … stop«</em>.
-      Tabellen bliver til: <strong>1</strong> HP laserprinter · <strong>2</strong> Gastronoma, Airfryer (599 kr.)
+      Eksempel: <em>»HP laserprinter … næste … Gastronoma airfryer … butikspris 599 … næste … stop«</em>
+      giver: <strong>1</strong> HP laserprinter · <strong>2</strong> Gastronoma airfryer (599 kr.)
     </p>
-  </section>
+  </details>
 
   <section class="entry" aria-label="Tilføj vare">
     <div class="entry-row">
@@ -175,17 +180,16 @@
         </div>
         <div class="small-fields">
           <label>Butikspris (kr.)
-            <input id="pris" type="text" inputmode="decimal" autocomplete="off" placeholder="valgfri – hvis den kendes">
+            <input id="pris" type="text" inputmode="decimal" autocomplete="off" placeholder="valgfri">
           </label>
           <label style="justify-content:flex-end">
             <span>&nbsp;</span>
-            <button id="addBtn" class="btn-primary" type="button">Tilføj vare&nbsp;(Enter)</button>
+            <button id="addBtn" class="btn-primary" type="button">Tilføj&nbsp;(Enter)</button>
           </label>
         </div>
       </div>
     </div>
-    <p class="hint">Tryk <strong>Enter</strong> i beskrivelsen for at gemme varen og gå videre til næste katalognummer. Tryk på 🎤 for at indtale beskrivelsen (kræver Chrome eller Edge) – sig <strong>»butikspris 599«</strong> for at lægge prisen i sit eget felt, sig <strong>»næste«</strong> for at gemme varen og hoppe til næste nummer, og sig <strong>»stop«</strong> for at slukke mikrofonen. Mikrofonen bliver ved med at lytte – også gennem pauser – indtil du siger »stop« eller trykker på knappen igen.</p>
-    <p class="hint" id="saveStatus">Listen gemmes automatisk i denne browser og gendannes, hvis fanen lukkes eller internettet ryger.</p>
+    <p class="hint" id="saveStatus">Gemmes automatisk i denne browser.</p>
   </section>
 
   <div class="table-wrap">
@@ -208,8 +212,8 @@
   <div class="toolbar">
     <button id="dlXlsx" class="btn-primary" type="button">Download Excel (.xlsx)</button>
     <button id="dlCsv" class="btn-ghost" type="button">Download CSV</button>
-    <button id="renumber" class="btn-ghost" type="button" title="Giv alle rækker fortløbende numre fra 1">Omnummerér</button>
-    <button id="clearAll" class="btn-danger" type="button">Ryd alt</button>
+    <button id="renumber" class="btn-link" type="button" title="Giv alle rækker fortløbende numre fra 1">Omnummerér</button>
+    <button id="clearAll" class="btn-link btn-link-danger" type="button">Ryd alt</button>
     <span class="count" id="count">0 varer</span>
   </div>
 </main>
@@ -243,8 +247,7 @@
       var d = new Date();
       var hh = ("0" + d.getHours()).slice(-2);
       var mm = ("0" + d.getMinutes()).slice(-2);
-      statusEl.textContent = "✓ Gemt automatisk kl. " + hh + ":" + mm +
-        " – listen gendannes, hvis fanen lukkes eller internettet ryger.";
+      statusEl.textContent = "✓ Gemt automatisk kl. " + hh + ":" + mm;
     } catch (e) {
       // Privat browsing eller fuldt lager – siden virker stadig, men gemmer ikke.
       statusEl.textContent = "⚠ Kunne ikke gemme automatisk i denne browser – husk at downloade filen, inden du lukker siden.";

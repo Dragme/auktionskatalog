@@ -208,7 +208,7 @@
   <div class="toolbar">
     <button id="dlXlsx" class="btn-primary" type="button">Download Excel (.xlsx)</button>
     <button id="dlCsv" class="btn-ghost" type="button">Download CSV</button>
-    <button id="renumber" class="btn-ghost" type="button" title="Giv alle rækker fortløbende numre fra første række">Omnummerér</button>
+    <button id="renumber" class="btn-ghost" type="button" title="Giv alle rækker fortløbende numre fra 1">Omnummerér</button>
     <button id="clearAll" class="btn-danger" type="button">Ryd alt</button>
     <span class="count" id="count">0 varer</span>
   </div>
@@ -344,9 +344,8 @@
 
   document.getElementById("renumber").addEventListener("click", function(){
     if (!items.length) return;
-    var start = items[0].nr;
-    items.forEach(function(item, i){ item.nr = start + i; });
-    nextNrEl.value = start + items.length;
+    items.forEach(function(item, i){ item.nr = i + 1; });
+    nextNrEl.value = items.length + 1;
     render();
   });
 
